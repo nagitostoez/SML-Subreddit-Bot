@@ -1,14 +1,13 @@
-import os
 import praw
-import googleapiclient.discovery
-import googleapiclient.errors
-from dotenv import load_dotenv
+import requests
 import time
+from dotenv import load_dotenv
+import os
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Get environment variables
+# Environment variables
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
@@ -16,92 +15,80 @@ REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
 REDDIT_USERNAME = os.getenv("REDDIT_USERNAME")
 REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
 SUBREDDIT_NAME = os.getenv("SUBREDDIT_NAME")
+LAST_POSTED_FILE = "last_posted_video.txt"  # File to store the last posted video
 
-# Set up YouTube API client
+# Function to get the latest video from the specified YouTube channel
 def get_latest_video(api_key, channel_id):
-    youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
-    request = youtube.search().list(
-        part="snippet",
-        channelId=channel_id,
-        order="date",
-        maxResults=1
-    )
-    response = request.execute()
+    url = f"https://www.googleapis.com/youtube/v3/search?key={api_key}&channelId={channel_id}&order=date&part=snippet"
+    response = requests.get(url).json()
 
-    video = response["items"][0]
-    video_title = video["snippet"]["title"]
-    video_url = f"https://www.youtube.com/watch?v={video['id']['videoId']}"
-    return video_title, video_url
+    # Check if there are any videos
+    if response.get("items"):
+        video = response["items"][0]  # Get the first video from the response
+        video_title = video["snippet"]["title"]
+        video_url = f"https://www.youtube.com/watch?v={video['id']['videoId']}"
+        return video_title, video_url
+    else:
+        print("No videos found!")
+        return None, None
 
-# Set up Reddit API client
-def create_reddit_post(title, url):
+# Function to post to Reddit
+def post_to_reddit(video_title, video_url):
     reddit = praw.Reddit(
         client_id=REDDIT_CLIENT_ID,
         client_secret=REDDIT_CLIENT_SECRET,
-        password=REDDIT_PASSWORD,
+        user_agent='python:sml_reddit_bot:v1.0 (by u/your_username)',
         username=REDDIT_USERNAME,
-        user_agent="sml_reddit_bot"
+        password=REDDIT_PASSWORD,
     )
 
-    # Create a new pinned post in the subreddit
     subreddit = reddit.subreddit(SUBREDDIT_NAME)
-    post = subreddit.submit(title, url=url)
-    post.mod.distinguish(sticky=True)  # Make the post pinned
-    print(f"Successfully created a pinned post: {title}")
+    post_title = f"Discussion Thread: {video_title}"
+    post_content = f"**Video URL:** {video_url}\n\nLet's discuss!"
 
-# Main function to check for new video and create Reddit post
+    subreddit.submit(post_title, selftext=post_content, stickied=True)
+    print(f"Posted discussion thread: {post_title}")
+
+# Function to read the last posted video from the file
+def read_last_posted_video():
+    if os.path.exists(LAST_POSTED_FILE):
+        with open(LAST_POSTED_FILE, "r") as file:
+            return file.read().strip()
+    return None
+
+# Function to save the last posted video to the file
+def save_last_posted_video(video_title):
+    with open(LAST_POSTED_FILE, "w") as file:
+        file.write(video_title)
+
+# Main function to check for new video and post
 def main():
-    last_video_url = None
+    print("Bot is starting...")
+
+    # Track previously posted video to avoid duplicates
+    last_posted_video = read_last_posted_video()  # Load the last posted video from the file
+
     while True:
+        print("Checking for new videos...")
+
+        # Get the latest video
         video_title, video_url = get_latest_video(YOUTUBE_API_KEY, CHANNEL_ID)
-        if video_url != last_video_url:
-            last_video_url = video_url
-            create_reddit_post(video_title, video_url)
+
+        if video_title and video_url:
+            # If the video is new and hasn't been posted already
+            if video_title != last_posted_video:
+                print(f"New video found: {video_title}. Posting to Reddit...")
+                post_to_reddit(video_title, video_url)
+                save_last_posted_video(video_title)  # Save the new video as the last posted video
+                last_posted_video = video_title
+            else:
+                print("No new video found, skipping...")
         else:
-            print("No new video uploaded yet.")
-        time.sleep(600)  # Check every 10 minutes
+            print("No video to post!")
 
-def store_last_video_id(video_id):
-    with open('last_video_id.txt', 'w') as f:
-        f.write(video_id)
-
-def get_last_video_id():
-    try:
-        with open('last_video_id.txt', 'r') as f:
-            return f.read()
-    except FileNotFoundError:
-        return None
-
-def main():
-    last_video_id = get_last_video_id()
-
-    # Fetch the latest video details
-    video_title, video_url = get_latest_video(YOUTUBE_API_KEY, CHANNEL_ID)
-    
-    # If a new video is found and it's not the same as the last posted one
-    if video_title and video_url:
-        video_id = video_url.split('v=')[-1]  # Extract the video ID from the URL
-        
-        # If this video is not the last one posted
-        if video_id != last_video_id:
-            post_to_reddit(video_title, video_url)
-            store_last_video_id(video_id)  # Store this video ID as posted
-        else:
-            print("This video has already been posted.")
-    else:
-        print("No new video found!")
-
-# Helper functions to store and get the last video ID
-def store_last_video_id(video_id):
-    with open('last_video_id.txt', 'w') as f:
-        f.write(video_id)
-
-def get_last_video_id():
-    try:
-        with open('last_video_id.txt', 'r') as f:
-            return f.read()
-    except FileNotFoundError:
-        return None  # If the file doesn't exist, return None
+        # Sleep for 10 minutes before checking again
+        print("Waiting 10 minutes before next check...")
+        time.sleep(600)  # 10 minutes
 
 if __name__ == "__main__":
-    main()  # This will execute the main function when the script is run directly
+    main()
