@@ -16,10 +16,11 @@ REDDIT_USERNAME = os.getenv("REDDIT_USERNAME")
 REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
 SUBREDDIT_NAME = os.getenv("SUBREDDIT_NAME")
 LAST_POSTED_FILE = "last_posted_video.txt"  # File to store the last posted video
+FLAIR_ID = "0283607c-a772-11eb-8e48-0e90f49436a3"  # Your flair ID
 
 # Function to get the latest video from the specified YouTube channel
 def get_latest_video(api_key, channel_id):
-    url = f"https://www.googleapis.com/youtube/v3/search?key={api_key}&channelId={channel_id}&order=date&part=snippet"
+    url = f"https://www.googleapis.com/youtube/v3/search?key={api_key}&channelId={channel_id}&order=date&part=snippet&type=video"
     response = requests.get(url).json()
 
     # Check if there are any videos
@@ -32,22 +33,29 @@ def get_latest_video(api_key, channel_id):
         print("No videos found!")
         return None, None
 
-# Function to post to Reddit
+# Function to post to Reddit as a link post with flair
 def post_to_reddit(video_title, video_url):
     reddit = praw.Reddit(
         client_id=REDDIT_CLIENT_ID,
         client_secret=REDDIT_CLIENT_SECRET,
-        user_agent='python:sml_reddit_bot:v1.0 (by u/your_username)',
+        user_agent="python:sml_reddit_bot:v1.0 (by u/your_username)",
         username=REDDIT_USERNAME,
         password=REDDIT_PASSWORD,
     )
 
     subreddit = reddit.subreddit(SUBREDDIT_NAME)
-    post_title = f"Discussion Thread: {video_title}"
-    post_content = f"**Video URL:** {video_url}\n\nLet's discuss!"
 
-    subreddit.submit(post_title, selftext=post_content, stickied=True)
-    print(f"Posted discussion thread: {post_title}")
+    # Submit as a link post
+    post = subreddit.submit(title=video_title, url=video_url)
+
+    # Apply flair and enable "Show Post Flair"
+    post.flair.select(FLAIR_ID)
+    post.mod.flair(text="Your Flair Text", flair_template_id=FLAIR_ID)
+    print(f"Posted video: {video_title} with flair.")
+
+    # Stick the post and mark as mod post
+    post.mod.distinguish(sticky=True)
+    print("Post has been stickied and marked as a mod post.")
 
 # Function to read the last posted video from the file
 def read_last_posted_video():
@@ -86,9 +94,9 @@ def main():
         else:
             print("No video to post!")
 
-        # Sleep for 10 minutes before checking again
-        print("Waiting 10 minutes before next check...")
-        time.sleep(600)  # 10 minutes
+        # Sleep for 30 seconds before checking again
+        print("Waiting 30 seconds before next check...")
+        time.sleep(30)  # 30 seconds
 
 if __name__ == "__main__":
     main()
