@@ -21,7 +21,7 @@ This bot automatically posts new videos from a specified YouTube channel to a Re
 To clone the repository, run the following command:
 
 ```bash
-git clone https://github.com/your_username/SML-Subreddit-Bot.git
+git clone https://github.com/nagitostoez/SML-Subreddit-Bot
 ```
 
 ### 2. Install dependencies
@@ -69,9 +69,3 @@ Feel free to fork this repository, submit issues, or create pull requests for im
 ## Disclaimer
 Please use this bot responsibly to avoid violating Reddit’s terms of service or hitting YouTube API quota limits.
 ```
-
-### Notes:
-- **Replace `your_username`** with your GitHub username.
-- **Fill in the `.env` file values** (e.g., `your_youtube_api_key`, `your_reddit_client_id`).
-
-This format is ready to be copied directly into your `README.md` file on GitHub. Let me know if you need further adjustments!
